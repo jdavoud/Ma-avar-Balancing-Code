@@ -76,7 +76,7 @@ int potPin = 2;
 float  steer = 0;
 #define STEER_MAX 27
 
-double kP = 7.34, kI = 44, kD = 0.06; //kD = 0.0125; //best so far
+double kP = 7.34, kI = 32, kD = 0.065; //best so far is 7.34,48,0.065
 //double kP = 0, kI = 0, kD = 0;
 float pTerm = 0, iTerm = 0, dTerm = 0;
 
@@ -171,6 +171,7 @@ void loop() {
    cur_angle = (gyro_angle+cur_angle) * gyro_constant + acc_angle * (1-gyro_constant); //MPU6050 complementary filter, adjust drift from gyro with accel
    //cur_angle = (gyro_angle) * 0.98 + acc_angle * 0.02; //MPU6050 complementary filter, adjust drift from gyro with accel
 
+
    Serial.print("Angle: ");Serial.print(cur_angle);Serial.print("\t");
    
    SegwayPID.Compute(); 
@@ -263,6 +264,14 @@ void setMotors (){
   //Gives a num up to 63
   motor1 = (int) (motor1percent * 1.26 + 0.5); //Int typecast rounds down, so add 0.5 makes it round to nearest int
   motor2 = (int) (motor2percent * 1.26 + 0.5);
+
+//  if(cur_angle > 0.005 && motor1 > -63 && motor2 > -63){ Elliot's favorite that brings motors up
+//    motor1 -= 3;
+//    motor2 -= 3;
+//  } else if (cur_angle < -0.005 && motor1 < 63 && motor2 < 63) {
+//    motor1 += 3;
+//    motor2 += 3;
+//  }
   
  
   //If Arduino is tipped too far, don't move motors
