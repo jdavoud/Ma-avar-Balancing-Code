@@ -76,14 +76,17 @@ int potPin = 2;
 float  steer = 0;
 #define STEER_MAX 27
 
-double kP = 70, kI = 0, kD = 0;
+double kP = 7.34, kI = 44, kD = 0.06; //kD = 0.0125; //best so far
+//double kP = 0, kI = 0, kD = 0;
 float pTerm = 0, iTerm = 0, dTerm = 0;
 
-int cal_amt = 100;
+int cal_amt = 50;
 
 float ypr[3];
 Quaternion q;
 VectorFloat gravity;
+
+bool runMotors = true;
 
 //Note: Set Sabertooth dip switches on the board for simplified serial and 9600 Baudrate. 
 #define SABER_TX_PIN  13 //Digital pin 13 is serial transmit pin to sabertooth
@@ -96,7 +99,9 @@ VectorFloat gravity;
 #define MOTOR2_FULL_FORWARD 128
 #define MOTOR2_FULL_REVERSE 255
 
-#define ANGLE_DEAD_ZONE 40 //TEST and update
+#define ANGLE_DEAD_ZONE 0.2 //TEST and update
+#define ANGLE_MAX 13
+#define ANGLE_MIN -5.4
 
 #define LED_PIN 13
 bool blinkState = false;
@@ -135,7 +140,10 @@ void setup() {
     // configure Arduino LED pin for output
     pinMode(LED_PIN, OUTPUT);
     Serial.println("Calibrating");
+    ST.motor(1,0);
+    ST.motor(2,0);
     calibrate();
+    
 }
 
 void loop() {
@@ -152,27 +160,30 @@ void loop() {
     acc_x_g = -1;
    }
    //Gyro gives an angular rate value
-   float gyro_y_deg = ((float) (gyro_y)) / 65.5; //Convert to in terms of degrees/sec
+   float gyro_y_deg = ((float) (gyro_y)) / 131; //Convert to in terms of degrees/sec
    
    acc_angle = asin(acc_x_g)* 57.296; //Find acceleration angle in terms of deg, 57.296 = 180/PI
-   Serial.print(acc_angle);Serial.print("\t");
+   Serial.print("Acc: "); Serial.print(acc_angle);Serial.print("\t");
    gyro_angle = gyro_y_deg * 0.004;
    //gyro_angle += gyro_y_deg * 0.004;
-   Serial.print(gyro_angle+cur_angle);Serial.print("\t");
-   cur_angle = (gyro_angle+cur_angle) * 0.99 + acc_angle * 0.01; //MPU6050 complementary filter, adjust drift from gyro with accel
+   Serial.print("Gyro: ");Serial.print(gyro_angle+cur_angle);Serial.print("\t");
+   float gyro_constant = 0.94;
+   cur_angle = (gyro_angle+cur_angle) * gyro_constant + acc_angle * (1-gyro_constant); //MPU6050 complementary filter, adjust drift from gyro with accel
    //cur_angle = (gyro_angle) * 0.98 + acc_angle * 0.02; //MPU6050 complementary filter, adjust drift from gyro with accel
 
-   Serial.print(cur_angle);Serial.print("\t");
+   Serial.print("Angle: ");Serial.print(cur_angle);Serial.print("\t");
    
    SegwayPID.Compute(); 
-   Serial.print("PID Output: ");Serial.print(balance);Serial.print("\t");
+   Serial.print("PID: ");Serial.print(balance);Serial.print("\t");
    //updatePID();
    //Serial.print("PID2 Output: ");Serial.print(balance);Serial.print("\t");
-   
-   //calculateTurn();
+   calculateTurn();
+   Serial.print("Steer: ");Serial.print(steer);Serial.print("\t");
    steer = 0;
 
    setMotors();
+
+   
    Serial.println();
    blinkState = !blinkState; // blink LED to indicate activity
    digitalWrite(LED_PIN, blinkState);
@@ -201,6 +212,7 @@ void calibrate(){
 }
 void calculateTurn(){
   int potReading = analogRead(potPin); //Returns between 0 and 1023
+  Serial.print("Pot: ");Serial.print(potReading);Serial.print("\t");
   steer = pow(3.0,((2/(POT_MAX-POT_MIN))*(potReading-((POT_MAX+POT_MIN)/2)))); //Cubic representation of pot reading https://www.desmos.com/calculator/9fptmmiiqp
   steer *= STEER_MAX;
 }
@@ -246,27 +258,49 @@ void setMotors (){
   if (multiplier < 0) multiplier *= -1;
   motor1percent *= multiplier;
   motor2percent *= multiplier;
-  Serial.print(motor1percent);Serial.print("\t");Serial.print(motor2percent);Serial.print("\t");
+  Serial.print("Mtr %: ");Serial.print(motor1percent);Serial.print("\t");Serial.print(motor2percent);Serial.print("\t");
   
   //Gives a num up to 63
-  motor1 = (int) (motor1percent * 0.63 + 0.5); //Int typecast rounds down, so add 0.5 makes it round to nearest int
-  motor2 = (int) (motor2percent * 0.63 + 0.5);
+  motor1 = (int) (motor1percent * 1.26 + 0.5); //Int typecast rounds down, so add 0.5 makes it round to nearest int
+  motor2 = (int) (motor2percent * 1.26 + 0.5);
   
  
   //If Arduino is tipped too far, don't move motors
-  if (cur_angle > ANGLE_DEAD_ZONE || cur_angle < -ANGLE_DEAD_ZONE){
+  if (cur_angle > ANGLE_MAX || cur_angle < ANGLE_MIN){
     motor1 = 0; 
     motor2 = 0;
+    runMotors = false;
   }
-  if (cur_angle < 4 && cur_angle > -4){
-    motor1 = 0; 
+  
+//  if (abs(cur_angle) < ANGLE_DEAD_ZONE){
+//    motor1 = 0; 
+//    motor2 = 0;
+//  }
+  if(motor1 > 70){
+    motor1 = 70;
+  }
+  if(motor1 < -70){
+    motor1 = -70;
+  }
+  if(motor2 > 70){
+    motor2 = 70;
+  }
+  if(motor2 < -70){
+    motor2 = -70;
+  }
+  if(!runMotors){
+    motor1 = 0;
     motor2 = 0;
   }
-  Serial.print(motor1);Serial.print("\t");Serial.print(motor2);Serial.print("\t");
+  Serial.print("Mtr : ");Serial.print(motor1);Serial.print("\t");Serial.print(motor2);Serial.print("\t");
   
   //Set the motors
   ST.motor(1, -motor1);
   ST.motor(2, -motor2);
+
+// ST.motor(1, 15);
+// ST.motor(2, -15);
+
 
 }
 
