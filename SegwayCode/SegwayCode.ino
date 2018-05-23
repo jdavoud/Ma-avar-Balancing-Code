@@ -76,7 +76,7 @@ int potPin = 2;
 float  steer = 0;
 #define STEER_MAX 27
 
-double kP = 7.34, kI = 32, kD = 0.065; //best so far is 7.34,48,0.065
+double kP = 7.34, kI = 25, kD = 0.065; //best so far is 7.34,48,0.065
 //double kP = 0, kI = 0, kD = 0;
 float pTerm = 0, iTerm = 0, dTerm = 0;
 
