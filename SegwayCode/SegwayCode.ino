@@ -76,7 +76,7 @@ int potPin = 2;
 float  steer = 0;
 #define STEER_MAX 27
 
-double kP = 7.34, kI = 25, kD = 0.065; //best so far is 7.34,48,0.065
+double kP = 28, kI = 0, kD = 0; //0.0398 was good with kp at 20
 //double kP = 0, kI = 0, kD = 0;
 float pTerm = 0, iTerm = 0, dTerm = 0;
 
@@ -101,7 +101,7 @@ bool runMotors = true;
 
 #define ANGLE_DEAD_ZONE 0.2 //TEST and update
 #define ANGLE_MAX 13
-#define ANGLE_MIN -5.4
+#define ANGLE_MIN -5.2
 
 #define LED_PIN 13
 bool blinkState = false;
@@ -148,31 +148,51 @@ void setup() {
 
 void loop() {
    long loop_timer = micros();
-   accelgyro.getMotion6(&acc_x, &acc_y, &acc_z, &gyro_x, &gyro_y, &gyro_z); //Gather raw data, acc_x and gyro_y are necessary
-   acc_x -= acc_x_offset; //Calibrate relevant angle values
-   gyro_y -= gyro_y_offset;
+   acc_angle = 0;
+   gyro_angle = 0;
+   for(int i = 0; i < 10; i++){
+    accelgyro.getMotion6(&acc_x, &acc_y, &acc_z, &gyro_x, &gyro_y, &gyro_z); //Gather raw data, acc_x and gyro_y are necessary
+//    if(i == 0){
+//      float new_acc = ((float) (acc_x))/(16384);
+//      float new_gyr = ((float) (gyro_y))/(131);
+//      float z = 0;
+//      for(int i = 0; i < 100; i++){
+//        z += ((float)(acc_z));
+//      }
+//      z /= 100;
+//      Serial.print(z);Serial.print("\t");Serial.print(new_gyr);Serial.print("\t");
+//    }
+    acc_x -= acc_x_offset; //Calibrate relevant angle values
+    gyro_y -= gyro_y_offset;
    
-   float acc_x_g = ((float) (acc_x)) / 16384; //Convert to in terms of g
-   if (acc_x_g > 1) { //Cap to between [1,-1] for inverse trig
-    acc_x_g = 1;
-   }
-   if (acc_x_g < -1) {
-    acc_x_g = -1;
-   }
+    float acc_x_g = ((float) (acc_x)) / 16384; //Convert to in terms of g
+    if (acc_x_g > 1) { //Cap to between [1,-1] for inverse trig
+      acc_x_g = 1;
+    }
+    if (acc_x_g < -1) {
+      acc_x_g = -1;
+    }
    //Gyro gives an angular rate value
-   float gyro_y_deg = ((float) (gyro_y)) / 131; //Convert to in terms of degrees/sec
+    float gyro_y_deg = ((float) (gyro_y)) / 131; //Convert to in terms of degrees/sec
    
-   acc_angle = asin(acc_x_g)* 57.296; //Find acceleration angle in terms of deg, 57.296 = 180/PI
-   Serial.print("Acc: "); Serial.print(acc_angle);Serial.print("\t");
-   gyro_angle = gyro_y_deg * 0.004;
+    acc_angle += asin(acc_x_g)* 57.296; //Find acceleration angle in terms of deg, 57.296 = 180/PI
+    
+    gyro_angle += gyro_y_deg * 0.004;
+  }
+  acc_angle /= 10;
+  gyro_angle /= 10;
    //gyro_angle += gyro_y_deg * 0.004;
+   
+   Serial.print("Acc: "); Serial.print(acc_angle);Serial.print("\t");
    Serial.print("Gyro: ");Serial.print(gyro_angle+cur_angle);Serial.print("\t");
-   float gyro_constant = 0.94;
+   float gyro_constant = 0.9;
+   float prev_angle = cur_angle;
    cur_angle = (gyro_angle+cur_angle) * gyro_constant + acc_angle * (1-gyro_constant); //MPU6050 complementary filter, adjust drift from gyro with accel
    //cur_angle = (gyro_angle) * 0.98 + acc_angle * 0.02; //MPU6050 complementary filter, adjust drift from gyro with accel
 
 
    Serial.print("Angle: ");Serial.print(cur_angle);Serial.print("\t");
+   Serial.print("Angle_dt: "); Serial.print((cur_angle-prev_angle)*0.004);Serial.print("\t");
    
    SegwayPID.Compute(); 
    Serial.print("PID: ");Serial.print(balance);Serial.print("\t");
@@ -280,11 +300,14 @@ void setMotors (){
     motor2 = 0;
     runMotors = false;
   }
+  Serial.print("Val : ");Serial.print(motor1);Serial.print(" ");Serial.print(motor2);Serial.print("\t");
   
-//  if (abs(cur_angle) < ANGLE_DEAD_ZONE){
-//    motor1 = 0; 
+//  if(motor1 > 100 || motor1 < -100 || motor2 > 100 || motor2 < -100){
+//    motor1 = 0;
 //    motor2 = 0;
+//    runMotors = false;
 //  }
+  
   if(motor1 > 70){
     motor1 = 70;
   }
@@ -301,14 +324,14 @@ void setMotors (){
     motor1 = 0;
     motor2 = 0;
   }
-  Serial.print("Mtr : ");Serial.print(motor1);Serial.print("\t");Serial.print(motor2);Serial.print("\t");
+  Serial.print("Mtr : ");Serial.print(motor1);Serial.print(" ");Serial.print(motor2);Serial.print("\t");
   
   //Set the motors
   ST.motor(1, -motor1);
   ST.motor(2, -motor2);
 
-// ST.motor(1, 15);
-// ST.motor(2, -15);
+  //ST.motor(1, 0);
+  //ST.motor(2, 0);
 
 
 }
