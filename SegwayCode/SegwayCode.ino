@@ -76,7 +76,7 @@ int potPin = 2;
 float  steer = 0;
 #define STEER_MAX 27
 
-double kP = 28, kI = 0, kD = 0; //0.0398 was good with kp at 20
+double kP = 29, kI = 0, kD = 0.014; //0.0398 was good with kp at 20
 //double kP = 0, kI = 0, kD = 0;
 float pTerm = 0, iTerm = 0, dTerm = 0;
 
@@ -100,8 +100,8 @@ bool runMotors = true;
 #define MOTOR2_FULL_REVERSE 255
 
 #define ANGLE_DEAD_ZONE 0.2 //TEST and update
-#define ANGLE_MAX 13
-#define ANGLE_MIN -5.2
+#define ANGLE_MAX 17.5
+#define ANGLE_MIN -15
 
 #define LED_PIN 13
 bool blinkState = false;
@@ -192,14 +192,12 @@ void loop() {
 
 
    Serial.print("Angle: ");Serial.print(cur_angle);Serial.print("\t");
-   Serial.print("Angle_dt: "); Serial.print((cur_angle-prev_angle)*0.004);Serial.print("\t");
+   //Serial.print("Angle_dt: "); Serial.print((cur_angle-prev_angle)*0.04);Serial.print("\t");
    
    SegwayPID.Compute(); 
    Serial.print("PID: ");Serial.print(balance);Serial.print("\t");
-   //updatePID();
-   //Serial.print("PID2 Output: ");Serial.print(balance);Serial.print("\t");
    calculateTurn();
-   Serial.print("Steer: ");Serial.print(steer);Serial.print("\t");
+   //Serial.print("Steer: ");Serial.print(steer);Serial.print("\t");
    steer = 0;
 
    setMotors();
@@ -233,7 +231,7 @@ void calibrate(){
 }
 void calculateTurn(){
   int potReading = analogRead(potPin); //Returns between 0 and 1023
-  Serial.print("Pot: ");Serial.print(potReading);Serial.print("\t");
+  //Serial.print("Pot: ");Serial.print(potReading);Serial.print("\t");
   steer = pow(3.0,((2/(POT_MAX-POT_MIN))*(potReading-((POT_MAX+POT_MIN)/2)))); //Cubic representation of pot reading https://www.desmos.com/calculator/9fptmmiiqp
   steer *= STEER_MAX;
 }
@@ -258,7 +256,7 @@ void updatePID(){
 float tunePIDwithPot (int pin){
   float potReading = analogRead(pin);
   potReading = (potReading / 100) * (potReading / 100); 
-  Serial.print(potReading);
+  //Serial.print(potReading);
   SegwayPID.SetTunings(kP,kI,kD);
   return potReading;
   
@@ -302,11 +300,11 @@ void setMotors (){
   }
   Serial.print("Val : ");Serial.print(motor1);Serial.print(" ");Serial.print(motor2);Serial.print("\t");
   
-//  if(motor1 > 100 || motor1 < -100 || motor2 > 100 || motor2 < -100){
-//    motor1 = 0;
-//    motor2 = 0;
-//    runMotors = false;
-//  }
+  if(motor1 > 110 || motor1 < -110 || motor2 > 110 || motor2 < -110){
+    motor1 = 0;
+    motor2 = 0;
+    runMotors = false;
+  }
   
   if(motor1 > 70){
     motor1 = 70;
@@ -329,9 +327,9 @@ void setMotors (){
   //Set the motors
   ST.motor(1, -motor1);
   ST.motor(2, -motor2);
-
-  //ST.motor(1, 0);
-  //ST.motor(2, 0);
+  
+  //ST.motor(1, 25);
+  //ST.motor(2, 25);
 
 
 }
