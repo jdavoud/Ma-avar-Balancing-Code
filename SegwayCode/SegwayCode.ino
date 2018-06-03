@@ -39,6 +39,7 @@ THE SOFTWARE.
 #include "MPU6050_6Axis_MotionApps20.h"
 #include <PID_v1.h>
 #include <Sabertooth.h>
+#include <Filters.h>
 
 // Arduino Wire library is required if I2Cdev I2CDEV_ARDUINO_WIRE implementation
 // is used in I2Cdev.h
@@ -70,14 +71,14 @@ float motor1percent, motor2percent;
 
 int potPin = 2;
 
-#define POT_MAX 1023 //the physical limits of the Potentiometer
-#define POT_MIN 0
+#define POT_MAX 568 //the physical limits of the Potentiometer
+#define POT_MIN 472
 
 float  steer = 0;
-#define STEER_MAX 27
+#define STEER_MAX 10
 
-double kP = 29, kI = 0, kD = 0.014; //0.0398 was good with kp at 20
-//double kP = 0, kI = 0, kD = 0;
+//double kP = 19, kI = 10, kD = 0.01825; //kP = 28 and kD = 0.014 was good before we saw the lateral shaking
+double kP = 28, kI = 0, kD = 0.008; //kD = 0.01675; //19.25 and 0.01675 was close
 float pTerm = 0, iTerm = 0, dTerm = 0;
 
 int cal_amt = 50;
@@ -106,6 +107,12 @@ bool runMotors = true;
 #define LED_PIN 13
 bool blinkState = false;
 
+FilterTwoPole filter;
+RunningStatistics inputStats, outputStats;
+
+float frequency = 2.0;
+
+
 PID SegwayPID (&cur_angle, &balance, &desired_angle, kP, kI, kD, DIRECT);
 
 SoftwareSerial SaberSerial = SoftwareSerial (SABER_RX_PIN, SABER_TX_PIN );
@@ -122,9 +129,12 @@ void setup() {
 
     SaberSerial.begin(9600);
 
-    delay(2000);
+    delay(1000);
     
     Serial.begin(9600);
+
+    ST.motor(1,0);
+    ST.motor(2,0);
     
     Serial.println("Initializing I2C devices...");
     accelgyro.initialize();
@@ -142,6 +152,11 @@ void setup() {
     Serial.println("Calibrating");
     ST.motor(1,0);
     ST.motor(2,0);
+    
+    filter.setAsFilter(LOWPASS_BUTTERWORTH, frequency);
+    inputStats.setWindowSecs(10);
+    outputStats.setWindowSecs(10);
+    
     calibrate();
     
 }
@@ -183,21 +198,26 @@ void loop() {
   gyro_angle /= 10;
    //gyro_angle += gyro_y_deg * 0.004;
    
-   Serial.print("Acc: "); Serial.print(acc_angle);Serial.print("\t");
-   Serial.print("Gyro: ");Serial.print(gyro_angle+cur_angle);Serial.print("\t");
+   //Serial.print("Acc: "); Serial.print(acc_angle);Serial.print("\t");
+   //Serial.print("Gyro: ");Serial.print(gyro_angle+cur_angle);Serial.print("\t");
    float gyro_constant = 0.9;
    float prev_angle = cur_angle;
    cur_angle = (gyro_angle+cur_angle) * gyro_constant + acc_angle * (1-gyro_constant); //MPU6050 complementary filter, adjust drift from gyro with accel
    //cur_angle = (gyro_angle) * 0.98 + acc_angle * 0.02; //MPU6050 complementary filter, adjust drift from gyro with accel
+   
 
-
-   Serial.print("Angle: ");Serial.print(cur_angle);Serial.print("\t");
+   Serial.print("rawAng: ");Serial.print(cur_angle);Serial.print("\t");
    //Serial.print("Angle_dt: "); Serial.print((cur_angle-prev_angle)*0.04);Serial.print("\t");
    
+   cur_angle = filter.input(cur_angle);
+
+   Serial.print("filtAng: ");Serial.print(cur_angle);Serial.print("\t");
+   
    SegwayPID.Compute(); 
-   Serial.print("PID: ");Serial.print(balance);Serial.print("\t");
+   
+   //Serial.print("PID: ");Serial.print(balance);Serial.print("\t");
    calculateTurn();
-   //Serial.print("Steer: ");Serial.print(steer);Serial.print("\t");
+   //Serial.print("Str2: ");Serial.print(steer);Serial.print("\t");
    steer = 0;
 
    setMotors();
@@ -210,7 +230,7 @@ void loop() {
 }
 void calibrate(){
   for (int cal_int = 0; cal_int < cal_amt ; cal_int ++){      //Read the raw acc and gyro data from the MPU-6050 cal_amt times
-    Serial.println(cal_int);
+    //Serial.println(cal_int);
     accelgyro.getMotion6(&acc_x, &acc_y, &acc_z, &gyro_x, &gyro_y, &gyro_z);                                           
     gyro_x_offset += gyro_x;                                              //Add the gyro x offset to the x offset variable
     gyro_y_offset += gyro_y;                                              //Add the gyro y offset to the y offset variable
@@ -232,28 +252,15 @@ void calibrate(){
 void calculateTurn(){
   int potReading = analogRead(potPin); //Returns between 0 and 1023
   //Serial.print("Pot: ");Serial.print(potReading);Serial.print("\t");
-  steer = pow(3.0,((2/(POT_MAX-POT_MIN))*(potReading-((POT_MAX+POT_MIN)/2)))); //Cubic representation of pot reading https://www.desmos.com/calculator/9fptmmiiqp
-  steer *= STEER_MAX;
+  steer = pow(3.0,((2/((float)(POT_MAX-POT_MIN)))*(potReading-(((float)(POT_MAX+POT_MIN))/2)))); //Cubic representation of pot reading https://www.desmos.com/calculator/9fptmmiiqp
+  steer *= (STEER_MAX);
+  //Serial.print("str^3: ");Serial.print(steer);Serial.print("\t");
+  steer = (float)((potReading-(((float)(POT_MAX+POT_MIN))/2)))/3;
+  //Serial.print("str1: ");Serial.print(steer);Serial.print("\t");
+  if (steer < 0.03 && steer > -0.03) { steer = 0; }
 }
-void updatePID(){
-//  if(Serial.available() > 0){
-//    int inBite = Serial.read();
-//    switch (inBite) {
-//      case 97 :
-//        kP += 0.5;
-//      case 98 :
-//        kP -= 0.5;
-//    }
-//    Serial.println(kP);
-//  }
-  error = desired_angle - cur_angle;
-  pTerm = kP * error;
-  iTerm += error * kI;
-  dTerm = kD * (error - last_error);
-  last_error = error;
-  balance = pTerm + iTerm + dTerm;
-}
-float tunePIDwithPot (int pin){
+
+float tunePIDwithPot (int pin){ //Useful if someone wanted to tune a potentiometer with a potentiometer, but not implemented
   float potReading = analogRead(pin);
   potReading = (potReading / 100) * (potReading / 100); 
   //Serial.print(potReading);
@@ -266,7 +273,7 @@ void setMotors (){
   int motor1, motor2; //final numbers for the motors
   motor1percent = balance + steer; //may be outside of [-100,100]
   motor2percent = balance - steer;
-  
+ 
   //Cap the percent at 100
   float multiplier = 1; 
   if(abs(motor1percent) >= abs(motor2percent) && abs(motor1percent) > 100){
@@ -274,23 +281,14 @@ void setMotors (){
   } else if (abs(motor2percent) >= abs(motor2percent) && abs(motor2percent) > 100){
     multiplier = (100/motor2percent);
   }
-  if (multiplier < 0) multiplier *= -1;
+  if (multiplier < 0) multiplier *= -1; // multiplier should be positive
   motor1percent *= multiplier;
   motor2percent *= multiplier;
-  Serial.print("Mtr %: ");Serial.print(motor1percent);Serial.print("\t");Serial.print(motor2percent);Serial.print("\t");
+  //Serial.print("Mtr %: ");Serial.print(motor1percent);Serial.print("\t");Serial.print(motor2percent);Serial.print("\t");
   
   //Gives a num up to 63
   motor1 = (int) (motor1percent * 1.26 + 0.5); //Int typecast rounds down, so add 0.5 makes it round to nearest int
   motor2 = (int) (motor2percent * 1.26 + 0.5);
-
-//  if(cur_angle > 0.005 && motor1 > -63 && motor2 > -63){ Elliot's favorite that brings motors up
-//    motor1 -= 3;
-//    motor2 -= 3;
-//  } else if (cur_angle < -0.005 && motor1 < 63 && motor2 < 63) {
-//    motor1 += 3;
-//    motor2 += 3;
-//  }
-  
  
   //If Arduino is tipped too far, don't move motors
   if (cur_angle > ANGLE_MAX || cur_angle < ANGLE_MIN){
@@ -298,13 +296,14 @@ void setMotors (){
     motor2 = 0;
     runMotors = false;
   }
-  Serial.print("Val : ");Serial.print(motor1);Serial.print(" ");Serial.print(motor2);Serial.print("\t");
   
-  if(motor1 > 110 || motor1 < -110 || motor2 > 110 || motor2 < -110){
-    motor1 = 0;
-    motor2 = 0;
-    runMotors = false;
-  }
+  //Serial.print("Val : ");Serial.print(motor1);Serial.print(" ");Serial.print(motor2);Serial.print("\t");
+  
+//  if(motor1 > 110 || motor1 < -110 || motor2 > 110 || motor2 < -110){
+//    motor1 = 0;
+//    motor2 = 0;
+//    runMotors = false;
+//  }
   
   if(motor1 > 70){
     motor1 = 70;
@@ -322,14 +321,15 @@ void setMotors (){
     motor1 = 0;
     motor2 = 0;
   }
-  Serial.print("Mtr : ");Serial.print(motor1);Serial.print(" ");Serial.print(motor2);Serial.print("\t");
+  
+  Serial.print("Mtr : ");Serial.print(motor1);Serial.print(" ");//Serial.print(motor2);Serial.print("\t");
   
   //Set the motors
   ST.motor(1, -motor1);
   ST.motor(2, -motor2);
   
-  //ST.motor(1, 25);
-  //ST.motor(2, 25);
+  //ST.motor(1, 0);
+  //ST.motor(2, 0);
 
 
 }
