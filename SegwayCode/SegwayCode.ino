@@ -71,14 +71,15 @@ float motor1percent, motor2percent;
 
 int potPin = 2;
 
-#define POT_MAX 568 //the physical limits of the Potentiometer
-#define POT_MIN 472
+#define POT_MAX 860 //the physical limits of the Potentiometer
+#define POT_MIN 747
 
 float  steer = 0;
 #define STEER_MAX 10
 
 //double kP = 19, kI = 10, kD = 0.01825; //kP = 28 and kD = 0.014 was good before we saw the lateral shaking
-double kP = 30, kI = 0, kD = 0.015; //kD = 0.01675; //19.25 and 0.01675 was close
+double kP = 39, kI = 0, kD = 0.024; //kD = 0.01675; //30 and 0.018 was good //a good version was 39 and 0.018 with 1.75 hz, 45 and 0.018 and 1.6 was decent
+//39 and 0.024 with 1.75 is best weve seen
 float pTerm = 0, iTerm = 0, dTerm = 0;
 
 int cal_amt = 50;
@@ -101,8 +102,8 @@ bool runMotors = true;
 #define MOTOR2_FULL_REVERSE 255
 
 #define ANGLE_DEAD_ZONE 0.2 //TEST and update
-#define ANGLE_MAX 17.5
-#define ANGLE_MIN -15
+#define ANGLE_MAX 15
+#define ANGLE_MIN -12
 
 #define LED_PIN 13
 bool blinkState = false;
@@ -164,6 +165,7 @@ void setup() {
 void loop() {
    long loop_timer = micros();
    acc_angle = 0;
+   float acc_angle_y = 0;
    gyro_angle = 0;
    for(int i = 0; i < 10; i++){
     accelgyro.getMotion6(&acc_x, &acc_y, &acc_z, &gyro_x, &gyro_y, &gyro_z); //Gather raw data, acc_x and gyro_y are necessary
@@ -178,27 +180,37 @@ void loop() {
 //      Serial.print(z);Serial.print("\t");Serial.print(new_gyr);Serial.print("\t");
 //    }
     acc_x -= acc_x_offset; //Calibrate relevant angle values
+    acc_y -= acc_y_offset;
     gyro_y -= gyro_y_offset;
    
     float acc_x_g = ((float) (acc_x)) / 16384; //Convert to in terms of g
+    float acc_y_g = ((float) (acc_y)) / 16384;
     if (acc_x_g > 1) { //Cap to between [1,-1] for inverse trig
       acc_x_g = 1;
     }
     if (acc_x_g < -1) {
       acc_x_g = -1;
     }
+    if (acc_y_g > 1) { //Cap to between [1,-1] for inverse trig
+      acc_y_g = 1;
+    }
+    if (acc_y_g < -1) {
+      acc_y_g = -1;
+    }
    //Gyro gives an angular rate value
     float gyro_y_deg = ((float) (gyro_y)) / 131; //Convert to in terms of degrees/sec
    
     acc_angle += asin(acc_x_g)* 57.296; //Find acceleration angle in terms of deg, 57.296 = 180/PI
-    
+    acc_angle_y += asin(acc_y_g)* 57.296;
     gyro_angle += gyro_y_deg * 0.004;
   }
+  
   acc_angle /= 10;
+  acc_angle_y /= 10;
   gyro_angle /= 10;
    //gyro_angle += gyro_y_deg * 0.004;
    
-   //Serial.print("Acc: "); Serial.print(acc_angle);Serial.print("\t");
+   Serial.print("AccY: "); Serial.print(acc_angle_y);Serial.print("\t");
    //Serial.print("Gyro: ");Serial.print(gyro_angle+cur_angle);Serial.print("\t");
    float gyro_constant = 0.9;
    float prev_angle = cur_angle;
@@ -206,19 +218,19 @@ void loop() {
    //cur_angle = (gyro_angle) * 0.98 + acc_angle * 0.02; //MPU6050 complementary filter, adjust drift from gyro with accel
    
 
-   Serial.print("rawAng: ");Serial.print(cur_angle);Serial.print("\t");
+   //Serial.print("rawAng: ");Serial.print(cur_angle);Serial.print("\t");
    //Serial.print("Angle_dt: "); Serial.print((cur_angle-prev_angle)*0.04);Serial.print("\t");
    
    cur_angle = filter.input(cur_angle);
 
-   Serial.print("filtAng: ");Serial.print(cur_angle);Serial.print("\t");
+   //Serial.print("filtAng: ");Serial.print(cur_angle);Serial.print("\t");
    
    SegwayPID.Compute(); 
    
    //Serial.print("PID: ");Serial.print(balance);Serial.print("\t");
    calculateTurn();
    //Serial.print("Str2: ");Serial.print(steer);Serial.print("\t");
-   steer = 0;
+   //steer = 0;
 
    setMotors();
 
@@ -252,7 +264,7 @@ void calibrate(){
 void calculateTurn(){
   int potReading = analogRead(potPin); //Returns between 0 and 1023
   //Serial.print("Pot: ");Serial.print(potReading);Serial.print("\t");
-  steer = pow(3.0,((2/((float)(POT_MAX-POT_MIN)))*(potReading-(((float)(POT_MAX+POT_MIN))/2)))); //Cubic representation of pot reading https://www.desmos.com/calculator/9fptmmiiqp
+  steer = pow(((2/((float)(POT_MAX-POT_MIN)))*(potReading-(((float)(POT_MAX+POT_MIN))/2))),3.0); //Cubic representation of pot reading https://www.desmos.com/calculator/9fptmmiiqp
   steer *= (STEER_MAX);
   //Serial.print("str^3: ");Serial.print(steer);Serial.print("\t");
   steer = (float)((potReading-(((float)(POT_MAX+POT_MIN))/2)))/3;
@@ -322,7 +334,7 @@ void setMotors (){
     motor2 = 0;
   }
   
-  Serial.print("Mtr : ");Serial.print(motor1);Serial.print(" ");//Serial.print(motor2);Serial.print("\t");
+  Serial.print("Mtr : ");Serial.print(motor1);Serial.print(" ");Serial.print(motor2);Serial.print("\t");
   
   //Set the motors
   ST.motor(1, -motor1);
