@@ -78,7 +78,7 @@ float  steer = 0;
 #define STEER_MAX 10
 
 //double kP = 19, kI = 10, kD = 0.01825; //kP = 28 and kD = 0.014 was good before we saw the lateral shaking
-double kP = 28, kI = 0, kD = 0.008; //kD = 0.01675; //19.25 and 0.01675 was close
+double kP = 30, kI = 0, kD = 0.015; //kD = 0.01675; //19.25 and 0.01675 was close
 float pTerm = 0, iTerm = 0, dTerm = 0;
 
 int cal_amt = 50;
@@ -110,7 +110,7 @@ bool blinkState = false;
 FilterTwoPole filter;
 RunningStatistics inputStats, outputStats;
 
-float frequency = 2.0;
+float frequency = 1.75;
 
 
 PID SegwayPID (&cur_angle, &balance, &desired_angle, kP, kI, kD, DIRECT);
