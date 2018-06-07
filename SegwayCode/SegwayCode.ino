@@ -179,7 +179,7 @@ void loop() {
 //      z /= 100;
 //      Serial.print(z);Serial.print("\t");Serial.print(new_gyr);Serial.print("\t");
 //    }
-    acc_x -= acc_x_offset; //Calibrate relevant angle values
+    //acc_x -= acc_x_offset; //Calibrate relevant angle values
     acc_y -= acc_y_offset;
     gyro_y -= gyro_y_offset;
    
@@ -210,7 +210,7 @@ void loop() {
   gyro_angle /= 10;
    //gyro_angle += gyro_y_deg * 0.004;
    
-   Serial.print("AccY: "); Serial.print(acc_angle_y);Serial.print("\t");
+   Serial.print("AccX: "); Serial.print(acc_angle);//Serial.print("\t");
    //Serial.print("Gyro: ");Serial.print(gyro_angle+cur_angle);Serial.print("\t");
    float gyro_constant = 0.9;
    float prev_angle = cur_angle;
@@ -334,14 +334,14 @@ void setMotors (){
     motor2 = 0;
   }
   
-  Serial.print("Mtr : ");Serial.print(motor1);Serial.print(" ");Serial.print(motor2);Serial.print("\t");
+  //Serial.print("Mtr : ");Serial.print(motor1);Serial.print(" ");Serial.print(motor2);Serial.print("\t");
   
   //Set the motors
-  ST.motor(1, -motor1);
-  ST.motor(2, -motor2);
+  //ST.motor(1, -motor1);
+  //ST.motor(2, -motor2);
   
-  //ST.motor(1, 0);
-  //ST.motor(2, 0);
+  ST.motor(1, 0);
+  ST.motor(2, 0);
 
 
 }
